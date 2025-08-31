@@ -37,5 +37,8 @@ ENV STRAPI_SERVER_NAME=default
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD node -e "console.log('Health check passed')" || exit 1
 
-# Start the application
-CMD ["node", "build/index.js"]
+# Add debug script for troubleshooting
+COPY debug-startup.js ./
+
+# Start the application with better error handling
+CMD ["sh", "-c", "echo 'Starting MCP Server...' && node debug-startup.js && node build/index.js"]

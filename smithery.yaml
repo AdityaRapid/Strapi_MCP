@@ -16,11 +16,15 @@ runtime:
       - STRAPI_API_KEY
     optional:
       - STRAPI_SERVER_NAME
+      - STRAPI_API_PREFIX
       - STRAPI_VERSION
       - MCP_LOG_LEVEL
       - MCP_ENABLE_DEBUG
       - MCP_SANITIZE_DATA
       - MCP_INCLUDE_STACK_TRACE
+
+  # Test command to verify the server works
+  test_command: "node test-mcp-simple.js"
 
 # Service configuration
 service:
@@ -53,8 +57,20 @@ tags:
 deploy:
   # Minimum required environment variables
   env_description:
-    STRAPI_API_URL: "URL of your Strapi instance (e.g., http://localhost:1337)"
+    STRAPI_API_URL: "URL of your Strapi instance (e.g., https://your-strapi.com)"
     STRAPI_API_KEY: "JWT token from Strapi Admin Panel > Settings > API Tokens"
     STRAPI_SERVER_NAME: "Optional name for the server instance (defaults to 'default')"
+    STRAPI_API_PREFIX: "Optional API prefix (e.g., '/api/v1', defaults to '/api')"
     STRAPI_VERSION: "Optional Strapi version (e.g., '5.*', '4.*')"
     MCP_LOG_LEVEL: "Optional log level (DEBUG, INFO, WARN, ERROR)"
+
+  # Example configuration for common setups
+  examples:
+    basic:
+      STRAPI_API_URL: "https://your-strapi-instance.com"
+      STRAPI_API_KEY: "your-api-token-here"
+    with_custom_prefix:
+      STRAPI_API_URL: "https://your-strapi-instance.com"
+      STRAPI_API_KEY: "your-api-token-here"
+      STRAPI_API_PREFIX: "/api/v1"
+      STRAPI_SERVER_NAME: "production"
