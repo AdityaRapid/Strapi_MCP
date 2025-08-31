@@ -149,16 +149,20 @@ const httpServer = http.createServer(async (req, res) => {
       }
     }
 
-    console.log('MCP request with config:', {
+    console.log('🔍 MCP request received:', {
+      method: req.method,
+      url: req.url,
       hasConfigParam: !!configParam,
-      serverName: config.STRAPI_SERVER_NAME
+      serverName: config.STRAPI_SERVER_NAME,
+      userAgent: req.headers['user-agent'],
+      timestamp: new Date().toISOString()
     });
     
     // Handle MCP requests
     if (req.method === 'GET') {
       // GET request to /mcp - return server info for scanning
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({
+      console.log('📡 Responding to GET /mcp (scanner request)');
+      const serverInfo = {
         name: 'strapi-mcp-server',
         version: '2.7.1',
         description: 'Strapi MCP Server with HTTP transport',
@@ -179,7 +183,11 @@ const httpServer = http.createServer(async (req, res) => {
           required: ['STRAPI_API_URL', 'STRAPI_API_KEY'],
           optional: ['STRAPI_API_PREFIX', 'STRAPI_SERVER_NAME'],
         },
-      }));
+      };
+
+      console.log('📤 Sending server info:', { toolCount: serverInfo.tools.length });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(serverInfo));
       return;
     } else if (req.method === 'POST') {
       let body = '';
@@ -187,10 +195,12 @@ const httpServer = http.createServer(async (req, res) => {
       req.on('end', async () => {
         try {
           const request = JSON.parse(body);
+          console.log('📨 MCP POST request:', { method: request.method, id: request.id });
 
           // Simple MCP protocol handling
           let response;
           if (request.method === 'initialize') {
+            console.log('🚀 Handling initialize request');
             response = {
               jsonrpc: '2.0',
               id: request.id,
@@ -206,11 +216,14 @@ const httpServer = http.createServer(async (req, res) => {
               },
             };
           } else if (request.method === 'tools/list') {
+            console.log('🔧 Handling tools/list request');
+            const tools = getMCPTools();
+            console.log('📋 Returning tools:', tools.map(t => t.name));
             response = {
               jsonrpc: '2.0',
               id: request.id,
               result: {
-                tools: getMCPTools(),
+                tools: tools,
               },
             };
           } else if (request.method === 'tools/call') {
@@ -275,6 +288,7 @@ const httpServer = http.createServer(async (req, res) => {
               result,
             };
           } else {
+            console.log('❌ Unknown method:', request.method);
             response = {
               jsonrpc: '2.0',
               id: request.id,
@@ -285,9 +299,11 @@ const httpServer = http.createServer(async (req, res) => {
             };
           }
 
+          console.log('📤 Sending response:', { method: request.method, success: !response.error });
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(response));
         } catch (error) {
+          console.error('❌ Error handling MCP request:', error);
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
             jsonrpc: '2.0',
