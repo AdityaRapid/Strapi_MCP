@@ -215,6 +215,19 @@ const httpServer = http.createServer(async (req, res) => {
                 },
               },
             };
+          } else if (request.method === 'notifications/initialized') {
+            console.log('✅ Handling notifications/initialized');
+            // This is a notification, no response needed
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end('');
+            return;
+          } else if (request.method === 'ping') {
+            console.log('🏓 Handling ping request');
+            response = {
+              jsonrpc: '2.0',
+              id: request.id,
+              result: {}
+            };
           } else if (request.method === 'tools/list') {
             console.log('🔧 Handling tools/list request');
             const tools = getMCPTools();
