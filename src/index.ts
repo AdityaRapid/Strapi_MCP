@@ -827,7 +827,7 @@ const STRAPI_VERSION_DIFFERENCES: StrapiVersionDifferences = {
 
 // Read config file or environment variables
 const CONFIG_PATH = join(homedir(), '.mcp', 'strapi-mcp-server.config.json');
-let config: Record<string, { api_url: string, api_key: string, version?: string }>;
+let config: Record<string, { api_url: string, api_key: string, version?: string, api_prefix?: string }>;
 
 // Try to load from environment variables first
 if (process.env.STRAPI_API_URL && process.env.STRAPI_API_KEY) {
@@ -836,7 +836,8 @@ if (process.env.STRAPI_API_URL && process.env.STRAPI_API_KEY) {
         [serverName]: {
             api_url: process.env.STRAPI_API_URL,
             api_key: process.env.STRAPI_API_KEY,
-            version: process.env.STRAPI_VERSION || undefined
+            version: process.env.STRAPI_VERSION || undefined,
+            api_prefix: process.env.STRAPI_API_PREFIX || '/api'
         }
     };
 
@@ -884,10 +885,10 @@ const server = new Server(
                         policy: "STRICT_USER_AUTHORIZATION_REQUIRED",
                         description: "No write operations without explicit user authorization",
                         protected_operations: [
-                            "POST /api/* (Create)",
-                            "PUT /api/* (Update)",
-                            "DELETE /api/* (Delete)",
-                            "POST /api/upload (Media Upload)"
+                            "POST {api_prefix}/* (Create)",
+                            "PUT {api_prefix}/* (Update)",
+                            "DELETE {api_prefix}/* (Delete)",
+                            "POST {api_prefix}/upload (Media Upload)"
                         ],
                         requirements: [
                             "Explicit user authorization for each write operation",
@@ -939,11 +940,11 @@ const server = new Server(
                     },
                     api_patterns: {
                         rest: {
-                            collection: "GET /api/{pluralName}",
-                            single: "GET /api/{pluralName}/{id}",
-                            create: "POST /api/{pluralName}",
-                            update: "PUT /api/{pluralName}/{id}",
-                            delete: "DELETE /api/{pluralName}/{id}"
+                            collection: "GET {api_prefix}/{pluralName}",
+                            single: "GET {api_prefix}/{pluralName}/{id}",
+                            create: "POST {api_prefix}/{pluralName}",
+                            update: "PUT {api_prefix}/{pluralName}/{id}",
+                            delete: "DELETE {api_prefix}/{pluralName}/{id}"
                         },
                         graphql: {
                             collection: "query { pluralName(pagination: { page: 1, pageSize: 100 }) { data { id attributes } } }",
@@ -1043,7 +1044,7 @@ const server = new Server(
 );
 
 // Helper function to get server config
-function getServerConfig(serverName: string): { API_URL: string, JWT: string } {
+function getServerConfig(serverName: string): { API_URL: string, JWT: string, API_PREFIX: string } {
     if (Object.keys(config).length === 0) {
         const exampleConfig = {
             "myserver": {
@@ -1060,7 +1061,8 @@ function getServerConfig(serverName: string): { API_URL: string, JWT: string } {
             `- STRAPI_API_URL=http://localhost:1337\n` +
             `- STRAPI_API_KEY=your-jwt-token-from-strapi-admin\n` +
             `- STRAPI_SERVER_NAME=default (optional, defaults to 'default')\n` +
-            `- STRAPI_VERSION=5.* (optional)\n\n` +
+            `- STRAPI_VERSION=5.* (optional)\n` +
+            `- STRAPI_API_PREFIX=/api/v1 (optional, defaults to '/api')\n\n` +
             `Option 2 - Configuration File:\n` +
             `Create a configuration file at:\n` +
             `${CONFIG_PATH}\n\n` +
@@ -1094,7 +1096,8 @@ function getServerConfig(serverName: string): { API_URL: string, JWT: string } {
     }
     return {
         API_URL: serverConfig.api_url,
-        JWT: serverConfig.api_key
+        JWT: serverConfig.api_key,
+        API_PREFIX: serverConfig.api_prefix || '/api'
     };
 }
 
@@ -1227,7 +1230,7 @@ async function uploadMedia(serverName: string, imageBuffer: Buffer, fileName: st
         formData.append('fileInfo', JSON.stringify(metadata));
     }
 
-    const url = `${serverConfig.API_URL}/api/upload`;
+    const url = `${serverConfig.API_URL}${serverConfig.API_PREFIX}/upload`;
     const startTime = Date.now();
     
     logger.debug(`Uploading media to Strapi`, {
@@ -1254,7 +1257,7 @@ async function uploadMedia(serverName: string, imageBuffer: Buffer, fileName: st
     logger.logApiCall(
         requestId || 'unknown',
         'POST',
-        '/api/upload',
+        `${serverConfig.API_PREFIX}/upload`,
         duration,
         response.status,
         serverName
@@ -1529,7 +1532,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             const validatedArgs = validateToolInput("strapi_get_content_types", args, requestId);
             const { server } = validatedArgs;
             logger.startRequest(requestId, name, server);
-            const data = await makeStrapiRequest(server, "/api/content-type-builder/content-types", undefined, requestId);
+            const serverConfig = getServerConfig(server);
+            const data = await makeStrapiRequest(server, `${serverConfig.API_PREFIX}/content-type-builder/content-types`, undefined, requestId);
 
             // Add helpful usage information to the response
             const response = {
@@ -1544,11 +1548,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     },
                     examples: {
                         rest: {
-                            collection: "GET /api/{pluralName}",
-                            single: "GET /api/{pluralName}/{id}",
-                            create: "POST /api/{pluralName}",
-                            update: "PUT /api/{pluralName}/{id}",
-                            delete: "DELETE /api/{pluralName}/{id}"
+                            collection: `GET ${serverConfig.API_PREFIX}/{pluralName}`,
+                            single: `GET ${serverConfig.API_PREFIX}/{pluralName}/{id}`,
+                            create: `POST ${serverConfig.API_PREFIX}/{pluralName}`,
+                            update: `PUT ${serverConfig.API_PREFIX}/{pluralName}/{id}`,
+                            delete: `DELETE ${serverConfig.API_PREFIX}/{pluralName}/{id}`
                         },
                         graphql: {
                             collection: "query { pluralName(pagination: { page: 1, pageSize: 100 }) { data { id attributes } } }",
@@ -1584,7 +1588,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 'pagination[pageSize]': pageSize.toString(),
             };
 
-            const data = await makeStrapiRequest(server, "/api/content-type-builder/components", params, requestId);
+            const serverConfig = getServerConfig(server);
+            const data = await makeStrapiRequest(server, `${serverConfig.API_PREFIX}/content-type-builder/components`, params, requestId);
 
             // Add pagination metadata to the response
             const response = {
@@ -1638,6 +1643,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             // Upload to Strapi with metadata (with authorization check)
             const data = await uploadMedia(server, processedBuffer, fileName, format, metadata, userAuthorized, requestId);
 
+            // Get server config for API prefix
+            const serverConfig = getServerConfig(server);
+
             // Format response with helpful usage information
             const response = {
                 success: true,
@@ -1656,7 +1664,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                         rest_api: "Use the file ID in your content type's media field",
                         graphql: "Use the file ID in your GraphQL mutations",
                         examples: {
-                            rest: "PUT /api/content-type/1 with body: { data: { image: " + data[0].id + " } }",
+                            rest: `PUT ${serverConfig.API_PREFIX}/content-type/1 with body: { data: { image: ${data[0].id} } }`,
                             graphql: "mutation { updateContentType(id: 1, data: { image: " + data[0].id + " }) { data { id } } }"
                         }
                     }
@@ -1725,7 +1733,7 @@ async function makeRestRequest(
     }
 
     const serverConfig = getServerConfig(serverName);
-    let url = `${serverConfig.API_URL}/${endpoint}`;
+    let url = `${serverConfig.API_URL}${serverConfig.API_PREFIX}/${endpoint}`;
 
     // Parse query parameters if provided
     if (params) {
