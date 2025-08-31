@@ -55,6 +55,24 @@ You can use this server directly with npx in your Claude Desktop configuration:
 
 ## Configuration
 
+The server supports two configuration methods:
+
+### Option 1: Environment Variables (Recommended for Deployment)
+
+Set the following environment variables:
+
+```bash
+# Required
+STRAPI_API_URL=http://localhost:1337
+STRAPI_API_KEY=your-jwt-token-from-strapi-admin
+
+# Optional
+STRAPI_SERVER_NAME=default  # Defaults to 'default'
+STRAPI_VERSION=5.*          # e.g., "5.*", "4.1.5", "v4"
+```
+
+### Option 2: Configuration File
+
 Create a configuration file at `~/.mcp/strapi-mcp-server.config.json`:
 
 ```json

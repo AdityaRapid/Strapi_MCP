@@ -825,29 +825,48 @@ const STRAPI_VERSION_DIFFERENCES: StrapiVersionDifferences = {
     }
 };
 
-// Read config file
+// Read config file or environment variables
 const CONFIG_PATH = join(homedir(), '.mcp', 'strapi-mcp-server.config.json');
 let config: Record<string, { api_url: string, api_key: string, version?: string }>;
 
-try {
-    const configContent = readFileSync(CONFIG_PATH, 'utf-8');
-    config = JSON.parse(configContent);
+// Try to load from environment variables first
+if (process.env.STRAPI_API_URL && process.env.STRAPI_API_KEY) {
+    const serverName = process.env.STRAPI_SERVER_NAME || 'default';
+    config = {
+        [serverName]: {
+            api_url: process.env.STRAPI_API_URL,
+            api_key: process.env.STRAPI_API_KEY,
+            version: process.env.STRAPI_VERSION || undefined
+        }
+    };
 
-    if (Object.keys(config).length === 0) {
-        throw new McpError(ErrorCode.InvalidParams, 'Config file exists but is empty');
-    }
-    
-    logger.info('Configuration loaded successfully', {
-        configPath: CONFIG_PATH,
-        serverCount: Object.keys(config).length,
-        servers: Object.keys(config)
+    logger.info('Configuration loaded from environment variables', {
+        serverName,
+        api_url: process.env.STRAPI_API_URL,
+        hasVersion: !!process.env.STRAPI_VERSION
     });
-} catch (error) {
-    logger.error('Error reading config file', {
-        configPath: CONFIG_PATH,
-        errorType: error instanceof Error ? error.constructor.name : typeof error
-    }, error instanceof Error ? error : undefined);
-    config = {};
+} else {
+    // Fallback to config file
+    try {
+        const configContent = readFileSync(CONFIG_PATH, 'utf-8');
+        config = JSON.parse(configContent);
+
+        if (Object.keys(config).length === 0) {
+            throw new McpError(ErrorCode.InvalidParams, 'Config file exists but is empty');
+        }
+
+        logger.info('Configuration loaded successfully from file', {
+            configPath: CONFIG_PATH,
+            serverCount: Object.keys(config).length,
+            servers: Object.keys(config)
+        });
+    } catch (error) {
+        logger.error('Error reading config file', {
+            configPath: CONFIG_PATH,
+            errorType: error instanceof Error ? error.constructor.name : typeof error
+        }, error instanceof Error ? error : undefined);
+        config = {};
+    }
 }
 
 // Create server instance
@@ -1036,7 +1055,14 @@ function getServerConfig(serverName: string): { API_URL: string, JWT: string } {
         throw new McpError(
             ErrorCode.InvalidParams,
             `No server configuration found!\n\n` +
-            `Please create a configuration file at:\n` +
+            `Option 1 - Environment Variables (recommended for deployment):\n` +
+            `Set the following environment variables:\n` +
+            `- STRAPI_API_URL=http://localhost:1337\n` +
+            `- STRAPI_API_KEY=your-jwt-token-from-strapi-admin\n` +
+            `- STRAPI_SERVER_NAME=default (optional, defaults to 'default')\n` +
+            `- STRAPI_VERSION=5.* (optional)\n\n` +
+            `Option 2 - Configuration File:\n` +
+            `Create a configuration file at:\n` +
             `${CONFIG_PATH}\n\n` +
             `Example configuration:\n` +
             `${JSON.stringify(exampleConfig, null, 2)}\n\n` +

@@ -1,0 +1,60 @@
+name: strapi-mcp-server
+description: Model Context Protocol server for Strapi CMS integration
+version: 2.7.1
+
+# Build configuration
+build:
+  dockerfile: Dockerfile
+  context: .
+
+# Runtime configuration
+runtime:
+  # Environment variables that must be provided at deployment
+  env:
+    required:
+      - STRAPI_API_URL
+      - STRAPI_API_KEY
+    optional:
+      - STRAPI_SERVER_NAME
+      - STRAPI_VERSION
+      - MCP_LOG_LEVEL
+      - MCP_ENABLE_DEBUG
+      - MCP_SANITIZE_DATA
+      - MCP_INCLUDE_STACK_TRACE
+
+# Service configuration
+service:
+  type: mcp-server
+  protocol: stdio
+  
+# Health check configuration
+health:
+  enabled: false  # MCP servers typically don't need HTTP health checks
+
+# Resource limits
+resources:
+  memory: 512Mi
+  cpu: 200m
+
+# Documentation
+docs:
+  readme: README.md
+  changelog: CHANGELOG.md
+  
+# Tags for discovery
+tags:
+  - strapi
+  - mcp
+  - cms
+  - model-context-protocol
+  - api
+
+# Deployment configuration
+deploy:
+  # Minimum required environment variables
+  env_description:
+    STRAPI_API_URL: "URL of your Strapi instance (e.g., http://localhost:1337)"
+    STRAPI_API_KEY: "JWT token from Strapi Admin Panel > Settings > API Tokens"
+    STRAPI_SERVER_NAME: "Optional name for the server instance (defaults to 'default')"
+    STRAPI_VERSION: "Optional Strapi version (e.g., '5.*', '4.*')"
+    MCP_LOG_LEVEL: "Optional log level (DEBUG, INFO, WARN, ERROR)"
