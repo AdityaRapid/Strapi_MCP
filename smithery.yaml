@@ -1,84 +1,29 @@
-name: strapi-mcp-server
-description: Model Context Protocol server for Strapi CMS integration
-version: 2.7.1
-
-# Build configuration
+runtime: "container"
 build:
-  dockerfile: Dockerfile
-  context: .
-
-# Runtime configuration
-runtime:
-  # Environment variables that must be provided at deployment
-  env:
-    required:
-      - STRAPI_API_URL
-      - STRAPI_API_KEY
-    optional:
-      - STRAPI_SERVER_NAME
-      - STRAPI_API_PREFIX
-      - STRAPI_VERSION
-      - MCP_LOG_LEVEL
-      - MCP_ENABLE_DEBUG
-      - MCP_SANITIZE_DATA
-      - MCP_INCLUDE_STACK_TRACE
-
-  # Test command to verify the server works
-  test_command: "node test-mcp-simple.js"
-
-  # HTTP endpoints for scanning and health checks
-  endpoints:
-    health: "/health"
-    scan: "/health"  # Smithery can scan this endpoint to discover tools
-
-# Service configuration
-service:
-  type: mcp-server
-  protocol: stdio
-  http_wrapper: true  # Uses HTTP wrapper for health checks and scanning
-
-# Health check configuration
-health:
-  enabled: true
-  endpoint: "/health"
-  port: 3000
-
-# Resource limits
-resources:
-  memory: 512Mi
-  cpu: 200m
-
-# Documentation
-docs:
-  readme: README.md
-  changelog: CHANGELOG.md
-  
-# Tags for discovery
-tags:
-  - strapi
-  - mcp
-  - cms
-  - model-context-protocol
-  - api
-
-# Deployment configuration
-deploy:
-  # Minimum required environment variables
-  env_description:
-    STRAPI_API_URL: "URL of your Strapi instance (e.g., https://your-strapi.com)"
-    STRAPI_API_KEY: "JWT token from Strapi Admin Panel > Settings > API Tokens"
-    STRAPI_SERVER_NAME: "Optional name for the server instance (defaults to 'default')"
-    STRAPI_API_PREFIX: "Optional API prefix (e.g., '/api/v1', defaults to '/api')"
-    STRAPI_VERSION: "Optional Strapi version (e.g., '5.*', '4.*')"
-    MCP_LOG_LEVEL: "Optional log level (DEBUG, INFO, WARN, ERROR)"
-
-  # Example configuration for common setups
-  examples:
-    basic:
-      STRAPI_API_URL: "https://your-strapi-instance.com"
-      STRAPI_API_KEY: "your-api-token-here"
-    with_custom_prefix:
-      STRAPI_API_URL: "https://your-strapi-instance.com"
-      STRAPI_API_KEY: "your-api-token-here"
-      STRAPI_API_PREFIX: "/api/v1"
-      STRAPI_SERVER_NAME: "production"
+  dockerfile: "Dockerfile"
+  dockerBuildPath: "."
+startCommand:
+  type: "http"
+  configSchema:
+    type: "object"
+    properties:
+      STRAPI_API_URL:
+        type: "string"
+        description: "URL of your Strapi instance"
+      STRAPI_API_KEY:
+        type: "string"
+        description: "JWT token from Strapi Admin Panel"
+      STRAPI_API_PREFIX:
+        type: "string"
+        description: "API prefix (e.g., /api/v1)"
+        default: "/api"
+      STRAPI_SERVER_NAME:
+        type: "string"
+        description: "Server instance name"
+        default: "default"
+    required: ["STRAPI_API_URL", "STRAPI_API_KEY"]
+  exampleConfig:
+    STRAPI_API_URL: "https://your-strapi-instance.com"
+    STRAPI_API_KEY: "your-jwt-token-here"
+    STRAPI_API_PREFIX: "/api/v1"
+    STRAPI_SERVER_NAME: "production"

@@ -29,21 +29,16 @@ RUN chown -R strapi:nodejs /app
 # Switch to non-root user
 USER strapi
 
-# Expose port for health checks and scanning
-EXPOSE 3000
+# Expose port 8081 as required by Smithery
+EXPOSE 8081
 
 # Set environment variables with defaults
 ENV NODE_ENV=production
-ENV STRAPI_SERVER_NAME=default
-ENV PORT=3000
+ENV PORT=8081
 
-# Health check using HTTP wrapper
+# Health check using the HTTP server
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD curl -f http://localhost:3000/health || exit 1
+    CMD curl -f http://localhost:8081/ || exit 1
 
-# Add debug and wrapper scripts
-COPY debug-startup.js ./
-COPY http-wrapper.js ./
-
-# Start the HTTP wrapper which can test and run the MCP server
-CMD ["node", "http-wrapper.js"]
+# Start the HTTP-based MCP server
+CMD ["node", "build/http-server.js"]

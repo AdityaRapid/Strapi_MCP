@@ -12,10 +12,12 @@
         "LICENSE"
     ],
     "scripts": {
-        "build": "tsc && chmod +x build/index.js",
+        "build": "tsc && chmod +x build/index.js && chmod +x build/http-server.js",
         "build:watch": "tsc --watch",
         "start": "node build/index.js",
+        "start:http": "node build/http-server.js",
         "dev": "ts-node src/index.ts",
+        "dev:http": "ts-node src/http-server.ts",
         "dev:watch": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts",
         "prepublishOnly": "npm run build"
     },
