@@ -131,19 +131,28 @@ const httpServer = http.createServer(async (req, res) => {
   const url = new URL(req.url!, `http://localhost:${PORT}`);
   
   if (url.pathname === '/mcp') {
-    // Parse configuration from URL parameter
-    const configParam = url.searchParams.get('config');
-    let config = parseConfig(configParam || undefined);
+    // Always use dummy config for MCP requests to ensure scanning works
+    const config: StrapiConfig = {
+      STRAPI_API_URL: 'https://demo.strapi.io',
+      STRAPI_API_KEY: 'demo-key',
+      STRAPI_API_PREFIX: '/api',
+      STRAPI_SERVER_NAME: 'demo'
+    };
 
-    // If no config provided, use dummy config for scanning
-    if (!config) {
-      config = {
-        STRAPI_API_URL: 'https://demo.strapi.io',
-        STRAPI_API_KEY: 'demo-key',
-        STRAPI_API_PREFIX: '/api',
-        STRAPI_SERVER_NAME: 'demo'
-      };
+    // Try to parse real config if provided, but fallback to dummy
+    const configParam = url.searchParams.get('config');
+    if (configParam) {
+      const parsedConfig = parseConfig(configParam);
+      if (parsedConfig) {
+        // Use real config if valid
+        Object.assign(config, parsedConfig);
+      }
     }
+
+    console.log('MCP request with config:', {
+      hasConfigParam: !!configParam,
+      serverName: config.STRAPI_SERVER_NAME
+    });
     
     // Handle MCP requests
     if (req.method === 'GET') {
@@ -295,16 +304,35 @@ const httpServer = http.createServer(async (req, res) => {
       res.writeHead(405, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Method not allowed' }));
     }
-  } else {
+  } else if (url.pathname === '/' || url.pathname === '/health') {
     // Health check endpoint
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       status: 'healthy',
       message: 'Strapi MCP Server HTTP endpoint',
-      endpoints: {
-        mcp: '/mcp?config=<base64-encoded-config>',
-      },
+      name: 'strapi-mcp-server',
       version: '2.7.1',
+      protocol: 'mcp',
+      transport: 'http',
+      endpoints: {
+        mcp: '/mcp',
+        health: '/',
+      },
+      tools: getMCPTools().map(tool => ({
+        name: tool.name,
+        description: tool.description,
+      })),
+      configuration: {
+        required: ['STRAPI_API_URL', 'STRAPI_API_KEY'],
+        optional: ['STRAPI_API_PREFIX', 'STRAPI_SERVER_NAME'],
+      },
+    }));
+  } else {
+    // 404 for unknown paths
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      error: 'Not found',
+      message: 'Available endpoints: /, /health, /mcp',
     }));
   }
 });
