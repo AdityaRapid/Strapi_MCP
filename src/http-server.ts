@@ -358,17 +358,30 @@ const httpServer = http.createServer(async (req, res) => {
 
                   console.log(`🔄 Getting content types from server: ${server || config.STRAPI_SERVER_NAME}`);
 
-                  const data = await makeRestRequest(config, 'content-type-builder/content-types', 'GET');
+                  // Try different possible endpoints for content types
+                  let data;
+                  let endpoint = 'content-type-builder/content-types';
+
+                  try {
+                    data = await makeRestRequest(config, endpoint, 'GET');
+                  } catch (error) {
+                    // Try alternative endpoint
+                    endpoint = 'v1/content-type-builder/content-types';
+                    data = await makeRestRequest(config, endpoint, 'GET');
+                  }
+
+                  const contentTypes = data.data || data || {};
+                  const contentTypesList = Object.values(contentTypes);
 
                   result = {
                     content: [
                       {
                         type: 'text',
                         text: JSON.stringify({
-                          success: true,
-                          server: server || config.STRAPI_SERVER_NAME,
-                          contentTypes: data.data || data,
-                          totalCount: Array.isArray(data.data) ? data.data.length : (Array.isArray(data) ? data.length : 0)
+                          contentTypes,
+                          contentTypesList,
+                          totalCount: contentTypesList.length,
+                          serverName: server || config.STRAPI_SERVER_NAME
                         }, null, 2),
                       },
                     ],
@@ -380,9 +393,11 @@ const httpServer = http.createServer(async (req, res) => {
                       {
                         type: 'text',
                         text: JSON.stringify({
-                          success: false,
-                          error: error instanceof Error ? error.message : 'Unknown error',
-                          server: request.params?.arguments?.server || config.STRAPI_SERVER_NAME,
+                          contentTypes: {},
+                          contentTypesList: [],
+                          totalCount: 0,
+                          serverName: request.params?.arguments?.server || config.STRAPI_SERVER_NAME,
+                          error: error instanceof Error ? error.message : 'Unknown error'
                         }, null, 2),
                       },
                     ],
@@ -455,17 +470,30 @@ const httpServer = http.createServer(async (req, res) => {
 
                   console.log(`🔄 Getting components from server: ${server || config.STRAPI_SERVER_NAME}`);
 
-                  const data = await makeRestRequest(config, 'content-type-builder/components', 'GET');
+                  // Try different possible endpoints for components
+                  let data;
+                  let endpoint = 'content-type-builder/components';
+
+                  try {
+                    data = await makeRestRequest(config, endpoint, 'GET');
+                  } catch (error) {
+                    // Try alternative endpoint
+                    endpoint = 'v1/content-type-builder/components';
+                    data = await makeRestRequest(config, endpoint, 'GET');
+                  }
+
+                  const components = data.data || data || [];
+                  const categories = [...new Set(components.map((comp: any) => comp.category).filter(Boolean))];
 
                   result = {
                     content: [
                       {
                         type: 'text',
                         text: JSON.stringify({
-                          success: true,
-                          server: server || config.STRAPI_SERVER_NAME,
-                          components: data.data || data,
-                          totalCount: Array.isArray(data.data) ? data.data.length : (Array.isArray(data) ? data.length : 0)
+                          components,
+                          categories,
+                          totalCount: Array.isArray(components) ? components.length : 0,
+                          serverName: server || config.STRAPI_SERVER_NAME
                         }, null, 2),
                       },
                     ],
@@ -477,9 +505,11 @@ const httpServer = http.createServer(async (req, res) => {
                       {
                         type: 'text',
                         text: JSON.stringify({
-                          success: false,
-                          error: error instanceof Error ? error.message : 'Unknown error',
-                          server: request.params?.arguments?.server || config.STRAPI_SERVER_NAME,
+                          components: [],
+                          categories: [],
+                          totalCount: 0,
+                          serverName: request.params?.arguments?.server || config.STRAPI_SERVER_NAME,
+                          error: error instanceof Error ? error.message : 'Unknown error'
                         }, null, 2),
                       },
                     ],
