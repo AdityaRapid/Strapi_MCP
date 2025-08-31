@@ -208,6 +208,8 @@ const httpServer = http.createServer(async (req, res) => {
                 protocolVersion: '2024-11-05',
                 capabilities: {
                   tools: {},
+                  resources: {},
+                  prompts: {},
                 },
                 serverInfo: {
                   name: 'strapi-mcp-server',
@@ -237,6 +239,24 @@ const httpServer = http.createServer(async (req, res) => {
               id: request.id,
               result: {
                 tools: tools,
+              },
+            };
+          } else if (request.method === 'resources/list') {
+            console.log('📚 Handling resources/list request');
+            response = {
+              jsonrpc: '2.0',
+              id: request.id,
+              result: {
+                resources: []
+              },
+            };
+          } else if (request.method === 'prompts/list') {
+            console.log('💬 Handling prompts/list request');
+            response = {
+              jsonrpc: '2.0',
+              id: request.id,
+              result: {
+                prompts: []
               },
             };
           } else if (request.method === 'tools/call') {
