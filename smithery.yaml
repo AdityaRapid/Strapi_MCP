@@ -27,8 +27,3 @@ startCommand:
     STRAPI_API_KEY: "your-jwt-token-here"
     STRAPI_API_PREFIX: "/api/v1"
     STRAPI_SERVER_NAME: "production"
-  testConfig:
-    STRAPI_API_URL: "https://demo.strapi.io"
-    STRAPI_API_KEY: "demo-key-for-testing"
-    STRAPI_API_PREFIX: "/api"
-    STRAPI_SERVER_NAME: "demo"
