@@ -20,16 +20,16 @@ interface StrapiConfig {
 // Parse base64-encoded config from URL parameter
 function parseConfig(configParam?: string): StrapiConfig | null {
   if (!configParam) return null;
-  
+
   try {
     const decoded = Buffer.from(configParam, 'base64').toString('utf-8');
     const config = JSON.parse(decoded);
-    
+
     // Validate required fields
     if (!config.STRAPI_API_URL || !config.STRAPI_API_KEY) {
       return null;
     }
-    
+
     return {
       STRAPI_API_URL: config.STRAPI_API_URL,
       STRAPI_API_KEY: config.STRAPI_API_KEY,
@@ -39,6 +39,74 @@ function parseConfig(configParam?: string): StrapiConfig | null {
   } catch (error) {
     console.error('Failed to parse config:', error);
     return null;
+  }
+}
+
+// Make REST request to Strapi
+async function makeRestRequest(
+  config: StrapiConfig,
+  endpoint: string,
+  method: string = 'GET',
+  params?: Record<string, any>,
+  body?: Record<string, any>
+): Promise<{ data: any; statusCode: number; meta?: any }> {
+  let url = `${config.STRAPI_API_URL}${config.STRAPI_API_PREFIX}/${endpoint}`;
+
+  // Parse query parameters if provided
+  if (params) {
+    const searchParams = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== null) {
+        searchParams.append(key, String(value));
+      }
+    }
+    const queryString = searchParams.toString();
+    if (queryString) {
+      url = `${url}?${queryString}`;
+    }
+  }
+
+  const headers = {
+    'Authorization': `Bearer ${config.STRAPI_API_KEY}`,
+    'Content-Type': 'application/json',
+  };
+
+  const requestOptions: RequestInit = {
+    method,
+    headers,
+  };
+
+  if (body && (method === 'POST' || method === 'PUT')) {
+    requestOptions.body = JSON.stringify(body);
+  }
+
+  console.log(`Making REST request: ${method} ${url}`);
+
+  try {
+    const response = await fetch(url, requestOptions);
+
+    if (!response.ok) {
+      let errorMessage = `Request failed with status: ${response.status}`;
+      try {
+        const errorData = await response.json();
+        if (errorData && typeof errorData === 'object' && 'error' in errorData) {
+          errorMessage += ` - ${errorData.error?.message || JSON.stringify(errorData.error)}`;
+        }
+      } catch {
+        errorMessage += ` - ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
+    }
+
+    const responseData = await response.json();
+    return {
+      data: responseData.data || responseData,
+      statusCode: response.status,
+      meta: responseData.meta || {}
+    };
+  } catch (error) {
+    console.error(`REST request failed:`, error);
+    throw error;
   }
 }
 
@@ -284,20 +352,204 @@ const httpServer = http.createServer(async (req, res) => {
                 break;
 
               case 'strapi_get_content_types':
-                result = {
-                  content: [
-                    {
-                      type: 'text',
-                      text: JSON.stringify({
-                        message: 'Content types endpoint configured',
-                        server: request.params?.arguments?.server || 'unknown',
-                        api_url: config.STRAPI_API_URL,
-                        api_prefix: config.STRAPI_API_PREFIX,
-                        endpoint: `${config.STRAPI_API_URL}${config.STRAPI_API_PREFIX}/content-type-builder/content-types`,
-                      }, null, 2),
+                try {
+                  const args = request.params?.arguments || {};
+                  const { server } = args;
+
+                  console.log(`🔄 Getting content types from server: ${server || config.STRAPI_SERVER_NAME}`);
+
+                  const data = await makeRestRequest(config, 'content-type-builder/content-types', 'GET');
+
+                  result = {
+                    content: [
+                      {
+                        type: 'text',
+                        text: JSON.stringify({
+                          success: true,
+                          server: server || config.STRAPI_SERVER_NAME,
+                          contentTypes: data.data || data,
+                          totalCount: Array.isArray(data.data) ? data.data.length : (Array.isArray(data) ? data.length : 0)
+                        }, null, 2),
+                      },
+                    ],
+                  };
+                } catch (error) {
+                  console.error('❌ Get content types failed:', error);
+                  result = {
+                    content: [
+                      {
+                        type: 'text',
+                        text: JSON.stringify({
+                          success: false,
+                          error: error instanceof Error ? error.message : 'Unknown error',
+                          server: request.params?.arguments?.server || config.STRAPI_SERVER_NAME,
+                        }, null, 2),
+                      },
+                    ],
+                  };
+                }
+                break;
+
+              case 'strapi_rest':
+                try {
+                  const args = request.params?.arguments || {};
+                  const { server, endpoint, method = 'GET', params, body } = args;
+
+                  if (!endpoint) {
+                    throw new Error('Endpoint is required');
+                  }
+
+                  // Clean endpoint (remove leading slash if present)
+                  const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
+
+                  console.log(`🔄 Executing REST request: ${method} ${cleanEndpoint}`);
+
+                  const apiResponse = await makeRestRequest(config, cleanEndpoint, method, params, body);
+
+                  // Structure response according to the output schema
+                  const responseData = {
+                    data: apiResponse.data,
+                    meta: apiResponse.meta,
+                    method,
+                    endpoint: cleanEndpoint,
+                    statusCode: apiResponse.statusCode
+                  };
+
+                  result = {
+                    content: [
+                      {
+                        type: 'text',
+                        text: JSON.stringify(responseData, null, 2),
+                      },
+                    ],
+                  };
+                } catch (error) {
+                  console.error('❌ REST request failed:', error);
+
+                  // Structure error response according to the output schema
+                  const errorResponse = {
+                    data: {
+                      error: error instanceof Error ? error.message : 'Unknown error'
                     },
-                  ],
-                };
+                    meta: {},
+                    method: request.params?.arguments?.method || 'GET',
+                    endpoint: request.params?.arguments?.endpoint || 'unknown',
+                    statusCode: 500 // Error status
+                  };
+
+                  result = {
+                    content: [
+                      {
+                        type: 'text',
+                        text: JSON.stringify(errorResponse, null, 2),
+                      },
+                    ],
+                  };
+                }
+                break;
+
+              case 'strapi_get_components':
+                try {
+                  const args = request.params?.arguments || {};
+                  const { server } = args;
+
+                  console.log(`🔄 Getting components from server: ${server || config.STRAPI_SERVER_NAME}`);
+
+                  const data = await makeRestRequest(config, 'content-type-builder/components', 'GET');
+
+                  result = {
+                    content: [
+                      {
+                        type: 'text',
+                        text: JSON.stringify({
+                          success: true,
+                          server: server || config.STRAPI_SERVER_NAME,
+                          components: data.data || data,
+                          totalCount: Array.isArray(data.data) ? data.data.length : (Array.isArray(data) ? data.length : 0)
+                        }, null, 2),
+                      },
+                    ],
+                  };
+                } catch (error) {
+                  console.error('❌ Get components failed:', error);
+                  result = {
+                    content: [
+                      {
+                        type: 'text',
+                        text: JSON.stringify({
+                          success: false,
+                          error: error instanceof Error ? error.message : 'Unknown error',
+                          server: request.params?.arguments?.server || config.STRAPI_SERVER_NAME,
+                        }, null, 2),
+                      },
+                    ],
+                  };
+                }
+                break;
+
+              case 'strapi_upload_media':
+                try {
+                  const args = request.params?.arguments || {};
+                  const { server, file_data, filename } = args;
+
+                  if (!file_data || !filename) {
+                    throw new Error('file_data and filename are required');
+                  }
+
+                  console.log(`🔄 Uploading media file: ${filename} to server: ${server || config.STRAPI_SERVER_NAME}`);
+
+                  // Convert base64 to buffer
+                  const buffer = Buffer.from(file_data, 'base64');
+
+                  // Create form data
+                  const formData = new FormData();
+                  const blob = new Blob([buffer]);
+                  formData.append('files', blob, filename);
+
+                  // Make upload request
+                  const uploadUrl = `${config.STRAPI_API_URL}${config.STRAPI_API_PREFIX}/upload`;
+                  const uploadResponse = await fetch(uploadUrl, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${config.STRAPI_API_KEY}`,
+                    },
+                    body: formData,
+                  });
+
+                  if (!uploadResponse.ok) {
+                    throw new Error(`Upload failed with status: ${uploadResponse.status}`);
+                  }
+
+                  const uploadData = await uploadResponse.json();
+
+                  result = {
+                    content: [
+                      {
+                        type: 'text',
+                        text: JSON.stringify({
+                          success: true,
+                          server: server || config.STRAPI_SERVER_NAME,
+                          uploadedFiles: Array.isArray(uploadData) ? uploadData : [uploadData],
+                          totalUploaded: Array.isArray(uploadData) ? uploadData.length : 1
+                        }, null, 2),
+                      },
+                    ],
+                  };
+                } catch (error) {
+                  console.error('❌ Upload media failed:', error);
+                  result = {
+                    content: [
+                      {
+                        type: 'text',
+                        text: JSON.stringify({
+                          success: false,
+                          error: error instanceof Error ? error.message : 'Unknown error',
+                          server: request.params?.arguments?.server || config.STRAPI_SERVER_NAME,
+                        }, null, 2),
+                      },
+                    ],
+                  };
+                }
                 break;
 
               default:
