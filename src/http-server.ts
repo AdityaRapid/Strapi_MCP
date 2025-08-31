@@ -528,39 +528,80 @@ const httpServer = http.createServer(async (req, res) => {
 
                   console.log(`🔄 Uploading media file: ${filename} to server: ${server || config.STRAPI_SERVER_NAME}`);
 
-                  // Convert base64 to buffer
-                  const buffer = Buffer.from(file_data, 'base64');
+                  let buffer: Buffer;
+
+                  // Handle different input formats
+                  if (file_data.startsWith('http://') || file_data.startsWith('https://')) {
+                    // If it's a URL, fetch the file first
+                    console.log(`📥 Downloading file from URL: ${file_data}`);
+                    const fileResponse = await fetch(file_data);
+                    if (!fileResponse.ok) {
+                      throw new Error(`Failed to download file from URL: ${fileResponse.status}`);
+                    }
+                    const arrayBuffer = await fileResponse.arrayBuffer();
+                    buffer = Buffer.from(arrayBuffer);
+                  } else {
+                    // Assume it's base64 encoded data
+                    try {
+                      buffer = Buffer.from(file_data, 'base64');
+                    } catch (error) {
+                      throw new Error('Invalid file_data format. Expected base64 encoded data or URL');
+                    }
+                  }
 
                   // Create form data
                   const formData = new FormData();
                   const blob = new Blob([buffer]);
                   formData.append('files', blob, filename);
 
-                  // Make upload request
-                  const uploadUrl = `${config.STRAPI_API_URL}${config.STRAPI_API_PREFIX}/upload`;
-                  const uploadResponse = await fetch(uploadUrl, {
-                    method: 'POST',
-                    headers: {
-                      'Authorization': `Bearer ${config.STRAPI_API_KEY}`,
-                    },
-                    body: formData,
-                  });
+                  // Try different upload endpoints
+                  let uploadData;
+                  let uploadUrl = `${config.STRAPI_API_URL}${config.STRAPI_API_PREFIX}/upload`;
 
-                  if (!uploadResponse.ok) {
-                    throw new Error(`Upload failed with status: ${uploadResponse.status}`);
+                  try {
+                    console.log(`📤 Trying upload to: ${uploadUrl}`);
+                    const uploadResponse = await fetch(uploadUrl, {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${config.STRAPI_API_KEY}`,
+                      },
+                      body: formData,
+                    });
+
+                    if (!uploadResponse.ok) {
+                      // Try alternative endpoint with v1 prefix
+                      uploadUrl = `${config.STRAPI_API_URL}${config.STRAPI_API_PREFIX}/v1/upload`;
+                      console.log(`📤 Trying alternative upload to: ${uploadUrl}`);
+
+                      const altUploadResponse = await fetch(uploadUrl, {
+                        method: 'POST',
+                        headers: {
+                          'Authorization': `Bearer ${config.STRAPI_API_KEY}`,
+                        },
+                        body: formData,
+                      });
+
+                      if (!altUploadResponse.ok) {
+                        throw new Error(`Upload failed with status: ${altUploadResponse.status} - ${altUploadResponse.statusText}`);
+                      }
+                      uploadData = await altUploadResponse.json();
+                    } else {
+                      uploadData = await uploadResponse.json();
+                    }
+                  } catch (fetchError) {
+                    throw new Error(`Upload failed: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`);
                   }
 
-                  const uploadData = await uploadResponse.json();
+                  const uploadedFiles = Array.isArray(uploadData) ? uploadData : [uploadData];
 
                   result = {
                     content: [
                       {
                         type: 'text',
                         text: JSON.stringify({
-                          success: true,
-                          server: server || config.STRAPI_SERVER_NAME,
-                          uploadedFiles: Array.isArray(uploadData) ? uploadData : [uploadData],
-                          totalUploaded: Array.isArray(uploadData) ? uploadData.length : 1
+                          uploadedFiles,
+                          totalUploaded: uploadedFiles.length,
+                          errors: []
                         }, null, 2),
                       },
                     ],
@@ -572,9 +613,12 @@ const httpServer = http.createServer(async (req, res) => {
                       {
                         type: 'text',
                         text: JSON.stringify({
-                          success: false,
-                          error: error instanceof Error ? error.message : 'Unknown error',
-                          server: request.params?.arguments?.server || config.STRAPI_SERVER_NAME,
+                          uploadedFiles: [],
+                          totalUploaded: 0,
+                          errors: [{
+                            filename: request.params?.arguments?.filename || 'unknown',
+                            error: error instanceof Error ? error.message : 'Unknown error'
+                          }]
                         }, null, 2),
                       },
                     ],
