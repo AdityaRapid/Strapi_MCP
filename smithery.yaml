@@ -26,14 +26,22 @@ runtime:
   # Test command to verify the server works
   test_command: "node test-mcp-simple.js"
 
+  # HTTP endpoints for scanning and health checks
+  endpoints:
+    health: "/health"
+    scan: "/health"  # Smithery can scan this endpoint to discover tools
+
 # Service configuration
 service:
   type: mcp-server
   protocol: stdio
-  
+  http_wrapper: true  # Uses HTTP wrapper for health checks and scanning
+
 # Health check configuration
 health:
-  enabled: false  # MCP servers typically don't need HTTP health checks
+  enabled: true
+  endpoint: "/health"
+  port: 3000
 
 # Resource limits
 resources:
