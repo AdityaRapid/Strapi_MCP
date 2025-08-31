@@ -133,19 +133,46 @@ const httpServer = http.createServer(async (req, res) => {
   if (url.pathname === '/mcp') {
     // Parse configuration from URL parameter
     const configParam = url.searchParams.get('config');
-    const config = parseConfig(configParam || undefined);
-    
+    let config = parseConfig(configParam || undefined);
+
+    // If no config provided, use dummy config for scanning
     if (!config) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({
-        error: 'Missing or invalid configuration',
-        message: 'Please provide valid STRAPI_API_URL and STRAPI_API_KEY in base64-encoded config parameter',
-      }));
-      return;
+      config = {
+        STRAPI_API_URL: 'https://demo.strapi.io',
+        STRAPI_API_KEY: 'demo-key',
+        STRAPI_API_PREFIX: '/api',
+        STRAPI_SERVER_NAME: 'demo'
+      };
     }
     
     // Handle MCP requests
-    if (req.method === 'POST') {
+    if (req.method === 'GET') {
+      // GET request to /mcp - return server info for scanning
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        name: 'strapi-mcp-server',
+        version: '2.7.1',
+        description: 'Strapi MCP Server with HTTP transport',
+        protocol: 'mcp',
+        transport: 'http',
+        capabilities: {
+          tools: getMCPTools().length,
+        },
+        tools: getMCPTools().map(tool => ({
+          name: tool.name,
+          description: tool.description,
+        })),
+        endpoints: {
+          mcp: '/mcp',
+          health: '/',
+        },
+        configuration: {
+          required: ['STRAPI_API_URL', 'STRAPI_API_KEY'],
+          optional: ['STRAPI_API_PREFIX', 'STRAPI_SERVER_NAME'],
+        },
+      }));
+      return;
+    } else if (req.method === 'POST') {
       let body = '';
       req.on('data', chunk => body += chunk);
       req.on('end', async () => {
