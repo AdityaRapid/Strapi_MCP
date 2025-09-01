@@ -408,7 +408,7 @@ const httpServer = http.createServer(async (req, res) => {
               case 'strapi_rest':
                 try {
                   const args = request.params?.arguments || {};
-                  const { server, endpoint, method = 'GET', params, body } = args;
+                  const { server, endpoint, method = 'GET', params, body, data } = args;
 
                   if (!endpoint) {
                     throw new Error('Endpoint is required');
@@ -417,9 +417,20 @@ const httpServer = http.createServer(async (req, res) => {
                   // Clean endpoint (remove leading slash if present)
                   const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
 
-                  console.log(`🔄 Executing REST request: ${method} ${cleanEndpoint}`);
+                  // Handle data parameter - can be string (JSON) or object
+                  let requestBody = body || data;
+                  if (typeof requestBody === 'string' && requestBody.trim().startsWith('{')) {
+                    try {
+                      requestBody = JSON.parse(requestBody);
+                    } catch (parseError) {
+                      console.warn('Failed to parse data as JSON, using as string:', parseError);
+                    }
+                  }
 
-                  const apiResponse = await makeRestRequest(config, cleanEndpoint, method, params, body);
+                  console.log(`🔄 Executing REST request: ${method} ${cleanEndpoint}`);
+                  console.log(`📦 Request body:`, requestBody);
+
+                  const apiResponse = await makeRestRequest(config, cleanEndpoint, method, params, requestBody);
 
                   // Structure response according to the output schema
                   const responseData = {
